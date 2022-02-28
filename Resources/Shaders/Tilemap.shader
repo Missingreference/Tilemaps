@@ -62,13 +62,15 @@ Shader "Elanetic/Tilemap"
                 float2 div = i.uv / uvSize;
                 float2 min = (div - frac(div)) * uvSize;
                 float2 max = float2(min.x + uvSize, min.y + uvSize);
-                float2 percent = (i.uv - min) / (max - min);
 
-                //return fixed4(percent.x, percent.y, 0,1);
+                //Seam fix
+                max += float2(0.00001f, 0.00001f);
+
+                float2 percent = (i.uv - min) / (max - min);
 
                 float cellUVSize = _CellSize / (_CellSize * _AtlasWidthCount);
                 float2 targetUV = float2(coordX * cellUVSize, coordY * cellUVSize) + (percent * cellUVSize);
-                
+
                 fixed4 col = tex2D(_TextureAtlas, targetUV);
                 return col;
             }
