@@ -4,6 +4,8 @@ using System.Collections.Generic;
 
 using UnityEngine;
 using UnityEngine.Rendering;
+using Unity.Collections;
+using UnityEngine.Experimental.Rendering;
 
 using Elanetic.Graphics;
 using Elanetic.Tools;
@@ -13,8 +15,6 @@ namespace Elanetic.Tilemaps
     /// <summary>
     /// A square grid based tilemap. Add textures to the texture atlas and set textures for each 
     /// </summary>
-    [RequireComponent(typeof(MeshFilter))]
-    [RequireComponent(typeof(MeshRenderer))]
     public class TextureGrid : MonoBehaviour
     {
         /// <summary>
@@ -26,12 +26,13 @@ namespace Elanetic.Tilemaps
             set
             {
 #if SAFE_EXECUTION
-                if(!m_LockSizes)
+                if(m_LockSizes)
                     throw new InvalidOperationException("Cannot change the chunk size for " + GetType().Name + " as it has been initialized. Create a new instance instead.");
 #endif
                 m_ChunkSize = value;
                 m_ChunkTextureSize = cellTextureSize * m_ChunkSize;
                 m_WorldCellSize = cellSize * chunkSize;
+                m_TotalCellCountPerChunk = m_ChunkSize * m_ChunkSize;
             }
         }
 
@@ -44,7 +45,7 @@ namespace Elanetic.Tilemaps
             set
             {
 #if SAFE_EXECUTION
-                if(!m_LockSizes)
+                if(m_LockSizes)
                     throw new InvalidOperationException("Cannot change the cell texture size for " + GetType().Name + " as it has been initialized. Create a new instance instead.");
 #endif
                 m_CellTextureSize = value;
@@ -61,7 +62,7 @@ namespace Elanetic.Tilemaps
             set
             {
 #if SAFE_EXECUTION
-                if(!m_LockSizes)
+                if(m_LockSizes)
                     throw new InvalidOperationException("Cannot change the cell size for " + GetType().Name + " as it has been initialized. Create a new instance instead.");
 #endif
                 m_CellSize = value;
@@ -79,7 +80,7 @@ namespace Elanetic.Tilemaps
             set
             {
 #if SAFE_EXECUTION
-                if(!m_LockSizes)
+                if(m_LockSizes)
                     throw new InvalidOperationException("Cannot change the texture format for " + GetType().Name + " as it has been initialized. Create a new instance instead.");
 #endif
                 m_TextureFormat = value;
@@ -92,6 +93,7 @@ namespace Elanetic.Tilemaps
         private float m_HalfCellSize = 2.0f * 0.5f;
         private int m_ChunkTextureSize = 36 * 8;
         private float m_WorldCellSize = 2.0f * 8;
+        private int m_TotalCellCountPerChunk = 64;
         private TextureFormat m_TextureFormat = TextureFormat.BC7;
 
         protected bool m_LockSizes = false;
@@ -102,43 +104,84 @@ namespace Elanetic.Tilemaps
 #endif
 
         private TextureAtlas m_TextureAtlas;
-        private GridArray<int> m_CellTextures = new GridArray<int>(8, 16);
-        private GridArray<GridChunk> m_Chunks = new GridArray<GridChunk>(8, 16);
+        private ChunkedGridArray<int> m_CellTextures = new ChunkedGridArray<int>(16, 8, 16);
+        private ChunkedGridArray<GridChunk> m_Chunks = new ChunkedGridArray<GridChunk>(16, 8, 16);
         private DirectTexture2D m_BlankTexture;
         private Material m_GridMaterial;
+        private Mesh m_ChunkMesh;
+        private Texture2D m_IndexCopyTexture;
+        private IntPtr m_IndexCopyPointer;
 
         //Called by AddCellTexture upon first texture added.
         private void Init()
         {
             m_TextureAtlas = new TextureAtlas(new Vector2Int(cellTextureSize, cellTextureSize), new Vector2Int(16, 16), textureFormat);
-
             m_LockSizes = true;
 
             m_BlankTexture = DirectGraphics.CreateTexture(cellTextureSize, cellTextureSize, textureFormat);
             DirectGraphics.ClearTexture(m_BlankTexture.nativePointer);
             m_TextureAtlas.AddTexture(m_BlankTexture.texture);
+
 #if SAFE_EXECUTION
             //Texture optimal usage check
             m_BlankHash = m_BlankTexture.texture.imageContentsHash;
 #endif
 
-            m_GridMaterial = new Material(Shader.Find("Sprites/Default"));
-            m_GridMaterial.enableInstancing = true;
-            m_GridMaterial.mainTexture = m_TextureAtlas.fullTexture;
-            theGrandMesh = new Mesh();
+            m_GridMaterial = new Material(Shader.Find("Elanetic/Tilemap"));
+            m_GridMaterial.SetTexture("_TextureAtlas", m_TextureAtlas.fullTexture);
+            m_GridMaterial.SetFloat("_CellSize", cellSize);
+            m_GridMaterial.SetFloat("_GridSize", chunkSize);
+            m_GridMaterial.SetFloat("_AtlasWidthCount", m_TextureAtlas.maxTextureCount.x);
 
-            MeshFilter meshFilter = GetComponent<MeshFilter>();
-            meshFilter.mesh = theGrandMesh;
+            m_ChunkMesh = new Mesh();
 
-            MeshRenderer meshRenderer = GetComponent<MeshRenderer>();
+            //Scale the meshes to be a little bigger that way seams between chunks are, well, seamless.
+            float bleedFixAmount = 0.0005f;
 
-            meshRenderer.material = m_GridMaterial;
-            meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
-            meshRenderer.receiveShadows = false;
-            meshRenderer.lightProbeUsage = LightProbeUsage.Off;
-            meshRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
-            meshRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
-            meshRenderer.allowOcclusionWhenDynamic = true;
+            Vector3[] vertices = new Vector3[4]
+            {
+                    new Vector3(-bleedFixAmount, -bleedFixAmount, 0),
+                    new Vector3(m_WorldCellSize+bleedFixAmount, -bleedFixAmount, 0),
+                    new Vector3(-bleedFixAmount, m_WorldCellSize+bleedFixAmount, 0),
+                    new Vector3(m_WorldCellSize+bleedFixAmount, m_WorldCellSize+bleedFixAmount, 0)
+            };
+            m_ChunkMesh.vertices = vertices;
+
+            int[] tris = new int[6]
+            {
+                    // lower left triangle
+                    0, 2, 1,
+                    // upper right triangle
+                    2, 3, 1
+            };
+            m_ChunkMesh.triangles = tris;
+
+            m_ChunkMesh.RecalculateNormals();
+            Vector2[] uv = new Vector2[4]
+            {
+                    new Vector2(0, 0),
+                    new Vector2(1, 0),
+                    new Vector2(0, 1),
+                    new Vector2(1, 1)
+            };
+            m_ChunkMesh.uv = uv;
+
+            m_IndexCopyTexture = new Texture2D(256, 1, TextureFormat.R8, false, true);
+            NativeArray<byte> indexData = m_IndexCopyTexture.GetRawTextureData<byte>();
+            for(int i = 0; i < indexData.Length; i++)
+            {
+                indexData[i] = (byte)i;
+            }
+            m_IndexCopyTexture.anisoLevel = 0;
+            m_IndexCopyTexture.filterMode = FilterMode.Point;
+            m_IndexCopyTexture.wrapMode = TextureWrapMode.Clamp;
+            m_IndexCopyTexture.Apply(false, true);
+            m_IndexCopyPointer = m_IndexCopyTexture.GetNativeTexturePtr();
+
+#if UNITY_EDITOR
+            //Editor only optimization
+            m_ClearData = new byte[m_TotalCellCountPerChunk];
+#endif
         }
 
         /// <summary>
@@ -187,22 +230,6 @@ namespace Elanetic.Tilemaps
             if(textureIndex >= m_TextureAtlas.textureCount)
                 throw new IndexOutOfRangeException("Tile at (" + x.ToString() + ", " + y.ToString() + ") with invalid texture atlas index of '" + textureIndex.ToString() + "'. Texture atlas only has '" + m_TextureAtlas.textureCount + "' textures added. Add textures with TextureGrid.AddCellTexture.");
 #endif
-            //if(m_TileTextures.size < FastMath.Abs(x) || m_TileTextures.size > FastMath.Abs(y))
-            {
-                //GetChunk(x, y).AddDirtyTile(x, y, textureIndex);
-                //m_TileTextures.SetItem(x, y, textureIndex);
-            }/*
-            else
-            {
-                int[] textureChunk = m_TileTextures.GetChunk(x, y);
-                int index = m_TileTextures.GetCellIndexWithinChunk(x, y);
-                if(textureChunk[index] != textureIndex)
-                {
-                    GetChunk(x, y).AddDirtyTile(x, y, textureIndex);
-                    textureChunk[index] = textureIndex;
-                }
-            }
-            */
 
             GridChunk chunk = GetChunk(x, y);
 
@@ -247,7 +274,19 @@ namespace Elanetic.Tilemaps
             GridChunk chunk = m_Chunks.GetItem(chunkPositionX, chunkPositionY);
             if(chunk == null)
             {
-                chunk = new GridChunk(chunkPositionX, chunkPositionY, this);
+                //chunk = new GridChunk(chunkPositionX, chunkPositionY, this);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                GameObject chunkObject = new GameObject("Chunk (" + chunkPositionX.ToString() + ", " + chunkPositionY.ToString() + ")");
+#else
+                GameObject chunkObject = new GameObject("Chunk");
+#endif
+                chunkObject.transform.SetParent(transform);
+                chunkObject.transform.localPosition = new Vector3(chunkPositionX * m_WorldCellSize, chunkPositionY * m_WorldCellSize, 0.0f);
+
+                chunk = chunkObject.AddComponent<GridChunk>();
+                chunk.chunkX = chunkPositionX;
+                chunk.chunkY = chunkPositionY;
+
                 m_Chunks.SetItem(chunkPositionX, chunkPositionY, chunk);
             }
 
@@ -265,7 +304,7 @@ namespace Elanetic.Tilemaps
             return m_Chunks.GetItem(chunkPositionX, chunkPositionY);
         }
 
-        #region Tranform
+#region Tranform
 
         public Vector2Int LocalToCell(Vector2 localPosition)
         {
@@ -297,240 +336,120 @@ namespace Elanetic.Tilemaps
             return transform.TransformPoint(CellCenterToLocal(cellPosition));
         }
 
-        public enum RenderingMode
-        {
-            CombineMeshes,
-            IndividualUVs
-        }
-
-        static public RenderingMode renderingMode = RenderingMode.IndividualUVs;
-
         #endregion
-        Mesh theGrandMesh;
-        Mesh theTilemap;
-        internal class GridChunk
-        {
 
+#if UNITY_EDITOR
+        private byte[] m_ClearData;
+#endif
+        internal class GridChunk : MonoBehaviour
+        {
             public int chunkX;
             public int chunkY;
             public TextureGrid textureGrid;
             public Mesh mesh;
 
-            private GameObject m_ChunkObject;
-            private DirectTexture2D m_DirectTexture;
+            private Texture2D m_DataTexture;
+            private IntPtr m_DataTexturePointer;
 
-            //Mesh stuff
-            private Vector3[] vertices;
-            private Vector2[] uvs;
-            private Color32[] colors;
+            private bool m_IsVisible = false;
+            private bool m_IsDirty = false;
 
-            public GridChunk(int chunkX, int chunkY, TextureGrid textureGrid)
+            private NativeArray<byte> m_Data;
+
+            void Awake()
             {
-                this.chunkX = chunkX;
-                this.chunkY = chunkY;
-                this.textureGrid = textureGrid;
+                textureGrid = transform.parent.GetComponent<TextureGrid>();
 
-                m_ChunkObject = new GameObject("Tilemap Chunk (" + chunkX.ToString() + ", " + chunkY.ToString() + ")");
-                m_ChunkObject.transform.SetParent(textureGrid.transform);
-                m_ChunkObject.transform.localPosition = new Vector3(chunkX * textureGrid.m_WorldCellSize, chunkY * textureGrid.m_WorldCellSize, 0.0f);
+                m_DataTexture = new Texture2D(textureGrid.chunkSize, textureGrid.chunkSize, TextureFormat.R8, false, true);
+                m_DataTexture.wrapMode = TextureWrapMode.Clamp;
+                m_DataTexture.anisoLevel = 0;
+                m_DataTexture.filterMode = FilterMode.Point;
+                m_Data = m_DataTexture.GetRawTextureData<byte>();
 
-                m_DirectTexture = DirectGraphics.CreateTexture(textureGrid.m_ChunkTextureSize, textureGrid.m_ChunkTextureSize, textureGrid.textureFormat);
-                DirectGraphics.ClearTexture(m_DirectTexture.nativePointer);
-
-                MeshFilter meshFilter = m_ChunkObject.AddComponent<MeshFilter>();
-                MeshRenderer meshRenderer = m_ChunkObject.AddComponent<MeshRenderer>();
-
-                mesh = new Mesh();
-
-                if(renderingMode == RenderingMode.CombineMeshes)
+#if UNITY_EDITOR
+                //We load data the "slow" way in the editor since NativeArray's safety checks are even slower in the editor but fast as heck in build
+                m_DataTexture.LoadRawTextureData(textureGrid.m_ClearData);
+#else
+                for(int i = 0; i < textureGrid.m_TotalCellCountPerChunk; i++)
                 {
-
-
-                    Vector3[] vertices = new Vector3[4]
-                    {
-                        new Vector3(0, 0, 0),
-                        new Vector3(textureGrid.m_WorldCellSize, 0, 0),
-                        new Vector3(0, textureGrid.m_WorldCellSize, 0),
-                        new Vector3(textureGrid.m_WorldCellSize, textureGrid.m_WorldCellSize, 0)
-                    };
-                    mesh.vertices = vertices;
-
-                    int[] tris = new int[6]
-                    {
-                        // lower left triangle
-                        0, 2, 1,
-                        // upper right triangle
-                        2, 3, 1
-                    };
-                    mesh.triangles = tris;
-
-                    /*Vector3[] normals = new Vector3[4]
-                    {
-                        -Vector3.forward,
-                        -Vector3.forward,
-                        -Vector3.forward,
-                        -Vector3.forward
-                    };
-                    mesh.normals = normals;
-
-                    */
-                    return;
-                    mesh.RecalculateNormals();
-                    Vector2[] uv = new Vector2[4]
-                    {
-                        new Vector2(0, 0),
-                        new Vector2(1, 0),
-                        new Vector2(0, 1),
-                        new Vector2(1, 1)
-                    };
-                    mesh.uv = uv;
-                    int subMeshCount = textureGrid.theGrandMesh.subMeshCount;
-
-                    textureGrid.theGrandMesh.subMeshCount++;
-                    SubMeshDescriptor des = new SubMeshDescriptor()
-                    {
-                        
-                    };
-                    //textureGrid.theGrandMesh.SetSubMesh(subMeshCount, )
-                    
-                    CombineInstance combine = new CombineInstance()
-                    {
-                        mesh = mesh,
-                        transform = m_ChunkObject.transform.localToWorldMatrix,
-                    };
-
-                    CombineInstance grandCombine = new CombineInstance()
-                    {
-                        mesh = textureGrid.theGrandMesh,
-                        transform = textureGrid.transform.localToWorldMatrix,
-                        
-                    };
-
-                    CombineInstance[] meshesToCombine = new CombineInstance[2]
-                    {
-                        combine,
-                        grandCombine
-                    };
-                    textureGrid.theGrandMesh = new Mesh();
-                    //textureGrid.theGrandMesh.CombineMeshes(meshesToCombine, false,);
-                    textureGrid.GetComponent<MeshFilter>().mesh = textureGrid.theGrandMesh;
-                    textureGrid.GetComponent<MeshRenderer>().material.mainTexture = m_DirectTexture.texture;
-
-                    /*
-                    meshFilter.mesh = mesh;
-
-                    //mRenderer.sharedMaterial = tilemap.m_TilemapMaterial;
-                    meshRenderer.material = textureGrid.m_GridMaterial;
-                    meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
-                    meshRenderer.receiveShadows = false;
-                    meshRenderer.lightProbeUsage = LightProbeUsage.Off;
-                    meshRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
-                    meshRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
-                    meshRenderer.allowOcclusionWhenDynamic = true;
-
-                    meshRenderer.material.mainTexture = m_DirectTexture.texture;
-                    */
+                    m_Data[i] = 0;
                 }
-                else if(renderingMode == RenderingMode.IndividualUVs)
-                {
-                    int cellCount = textureGrid.chunkSize * textureGrid.chunkSize;
+#endif
+                m_DataTexture.Apply(false, false);
+                m_DataTexturePointer = m_DataTexture.GetNativeTexturePtr();
+                m_Data = m_DataTexture.GetRawTextureData<byte>();
 
-                    vertices = new Vector3[4 * cellCount];
-                    int[] triangles = new int[6 * cellCount];
-                    uvs = new Vector2[vertices.Length];
-                    colors = new Color32[vertices.Length];
+                
 
-                    for(int i = 0; i < cellCount; i++)
-                    {
-                        int index0 = i * 4;
-                        int index1 = index0 + 1;
-                        int index2 = index0 + 2;
-                        int index3 = index0 + 3;
+                MeshFilter meshFilter = gameObject.AddComponent<MeshFilter>();
+                MeshRenderer meshRenderer = gameObject.AddComponent<MeshRenderer>();
 
-                        //Vertices
-                        Vector2Int coord = Utils.IndexToCoord(i, textureGrid.chunkSize);
-                        float targetX = coord.x * textureGrid.cellSize;
-                        float targetY = coord.y * textureGrid.cellSize;
+                meshFilter.sharedMesh = textureGrid.m_ChunkMesh;
+                meshRenderer.material = textureGrid.m_GridMaterial;
+                meshRenderer.material.SetTexture("_TextureIndices", m_DataTexture);
 
-                        vertices[index0] = new Vector3(targetX, targetY, 0);
-                        vertices[index1] = new Vector3(targetX + textureGrid.cellSize,targetY, 0);
-                        vertices[index2] = new Vector3(targetX, targetY + textureGrid.cellSize, 0);
-                        vertices[index3] = new Vector3(targetX + textureGrid.cellSize, targetY + textureGrid.cellSize, 0);
-
-                        //Triangles
-                        int triangleIndex0 = i * 6;
-                        triangles[triangleIndex0] = index0;
-                        triangles[triangleIndex0 + 1] = index2;
-                        triangles[triangleIndex0 + 2] = index1;
-
-                        triangles[triangleIndex0 + 3] = index2;
-                        triangles[triangleIndex0 + 4] = index3;
-                        triangles[triangleIndex0 + 5] = index1;
-
-                        //UVs
-                        //uvs[index0] = Vector2.zero;
-                        //uvs[index1] = Vector2.right;
-                        //uvs[index2] = Vector2.up;
-                        //uvs[index3] = Vector2.one;
-                        Vector2 max = new Vector2((textureGrid.m_TextureAtlas.textureSize.x - 0.002f) / (float)textureGrid.m_TextureAtlas.fullTexture.width, (textureGrid.m_TextureAtlas.textureSize.y - 0.002f) / (float)textureGrid.m_TextureAtlas.fullTexture.height);
-                        uvs[index0] = Vector2.zero;
-                        uvs[index1] = new Vector2(max.x, 0.0f);
-                        uvs[index2] = new Vector2(0.0f, max.y);
-                        uvs[index3] = max;
-                    }
-                    mesh.vertices = vertices;
-                    mesh.triangles = triangles;
-                    mesh.uv = uvs;
-
-                    mesh.RecalculateNormals();
-                    meshFilter.mesh = mesh;
-                    meshRenderer.sharedMaterial = textureGrid.m_GridMaterial;
-                    
-                }
-
+                meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                meshRenderer.receiveShadows = false;
+                meshRenderer.lightProbeUsage = LightProbeUsage.Off;
+                meshRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+                meshRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+                meshRenderer.allowOcclusionWhenDynamic = true;                
             }
 
             public void SetTexture(int cellX, int cellY, int textureAtlasIndex)
             {
-                //Debug.Log("SetTexture: Chunk: " + chunkX.ToString() + ", " + chunkY.ToString() + " Cell: " + cellX.ToString() + ", " + cellY.ToString());
-                Vector2Int sourcePosition = textureGrid.m_TextureAtlas.AtlasIndexToPixelCoord(textureAtlasIndex);
-                Vector2Int destination = GetTileTexturePosition(cellX, cellY);
-
-                //int localCellX = cellX % textureGrid.chunkSize;
-                //int localCellY = cellY % textureGrid.chunkSize;
-
                 int localCellX = cellX - (chunkX * textureGrid.chunkSize);
                 int localCellY = cellY - (chunkY * textureGrid.chunkSize);
 
-                //Debug.Log("Local Cell: " + localCellX.ToString() + ", " + localCellY.ToString()); 
-                //return;
-                //DirectGraphics.CopyTexture(textureGrid.m_TextureAtlas.nativeTexturePointer, sourcePosition.x, sourcePosition.y, textureGrid.cellTextureSize, textureGrid.cellTextureSize, m_DirectTexture.nativePointer, destination.x, destination.y);
-                int index = Utils.CoordToIndex(FastMath.Abs(localCellX), FastMath.Abs(localCellY), textureGrid.chunkSize) * 4;
-                Vector2Int pixelCoordinate = textureGrid.m_TextureAtlas.AtlasIndexToPixelCoord(textureAtlasIndex);
-                
-                Vector2 min = new Vector2(pixelCoordinate.x / (float)textureGrid.m_TextureAtlas.fullTexture.width, pixelCoordinate.y / (float)textureGrid.m_TextureAtlas.fullTexture.height);
-                Vector2 max = new Vector2(((pixelCoordinate.x + textureGrid.m_TextureAtlas.textureSize.x) - 0.002f) / (float)textureGrid.m_TextureAtlas.fullTexture.width, ((pixelCoordinate.y + textureGrid.m_TextureAtlas.textureSize.y) - 0.002f) / (float)textureGrid.m_TextureAtlas.fullTexture.height);
-                uvs[index] = min;
-                uvs[index+1] = new Vector2(max.x, min.y);
-                uvs[index+2] = new Vector2(min.x, max.y);
-                uvs[index+3] = max;
+                int textureCoordinateX = FastMath.Abs(localCellX);
+                int textureCoordinateY = FastMath.Abs(localCellY);
+                int index = Utils.CoordToIndex(textureCoordinateX, textureCoordinateY, textureGrid.chunkSize);
 
-                mesh.uv = uvs;
+                m_Data[index] = (byte)textureAtlasIndex;
+                if(!m_IsVisible)
+                {
+                    m_IsDirty = true;
+                }
+                else
+                {
+                    DirectGraphics.CopyTexture(textureGrid.m_IndexCopyPointer, textureAtlasIndex, 0, 1, 1, m_DataTexturePointer, textureCoordinateX, textureCoordinateY);
+                }
             }
 
             public void ClearTexture(int cellX, int cellY)
             {
-                Vector2Int destination = GetTileTexturePosition(cellX, cellY);
-                //DirectGraphics.CopyTexture(textureGrid.m_BlankTexture.nativePointer, 0, 0, textureGrid.cellTextureSize, textureGrid.cellTextureSize, m_DirectTexture.nativePointer, destination.x, destination.y);
-
                 SetTexture(cellX, cellY, 0);
             }
 
-            private Vector2Int GetTileTexturePosition(int x, int y)
-            {
-                Vector2Int v = new Vector2Int(Mathf.FloorToInt(x / (float)textureGrid.chunkSize) * textureGrid.chunkSize, Mathf.FloorToInt(y / (float)textureGrid.chunkSize) * textureGrid.chunkSize);
 
-                return new Vector2Int((-(v.x - x)) * textureGrid.cellTextureSize, (-(v.y - y)) * textureGrid.cellTextureSize);
+            private void OnBecameVisible()
+            {
+                if(m_IsVisible) return;
+
+                UpdateVisibility();
+            }
+
+            private void OnBecameInvisible()
+            {
+                m_IsVisible = false;
+            }
+
+            private void OnWillRenderObject()
+            {
+                if(m_IsVisible) return;
+
+                UpdateVisibility();
+            }
+
+            private void UpdateVisibility()
+            {
+                m_IsVisible = true;
+
+                if(!m_IsDirty) return;
+
+                m_DataTexture.Apply(false, false);
+                m_DataTexturePointer = m_DataTexture.GetNativeTexturePtr();
+                m_Data = m_DataTexture.GetRawTextureData<byte>();
             }
         }
     }

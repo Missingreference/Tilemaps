@@ -2,17 +2,18 @@ Shader "Elanetic/Tilemap"
 {
     Properties
     {
-        _TextureAtlas ("Texture", 2D) = "white" {}
-        _TextureIndices ("Texture", 2D) = "white" {}
+        _TextureAtlas ("Texture Atlas", 2D) = "white" {}
+        _TextureIndices ("Texture Data", 2D) = "white" {}
         _CellSize("Cell Size", float) = 36
         _GridSize("Grid Size", float) = 1024 
         _AtlasWidthCount("Atlas Width Count", float) = 3
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
+        Tags { "RenderType"="Transparent" "Queue"="Transparent" }
         LOD 100
 
+		Blend One OneMinusSrcAlpha
         Pass
         {
             CGPROGRAM
@@ -40,7 +41,8 @@ Shader "Elanetic/Tilemap"
             float _CellSize;
             float _GridSize;
             float _AtlasWidthCount;
-
+            float _GutterSize = 1.0f;
+            float _AtlasSize = 1.0f;
             v2f vert (appdata v)
             {
                 v2f o;
@@ -53,26 +55,20 @@ Shader "Elanetic/Tilemap"
 
             fixed4 frag (v2f i) : SV_Target
             {
-	            float index = floor(tex2D( _TextureIndices, i.uv ).r * 256.0);
+                float cellSize = (1.0f/_GridSize);
+                float2 sourceUV =  cellSize * floor(i.uv / cellSize);
+                int index = tex2D(_TextureIndices, sourceUV).x * 256;
+
+                int xPos = index % _AtlasWidthCount;
+                int yPos = index / _AtlasWidthCount;
+                float2 uv = float2(xPos, yPos) / _AtlasWidthCount;
                 
-                float coordX = floor(index % _AtlasWidthCount);
-                float coordY = floor(index / _AtlasWidthCount);
+                // Offset to fragment position inside tile
+                float xOffset = frac(i.uv.x * _GridSize) / (_AtlasWidthCount+0.001f);
+                float yOffset = frac(i.uv.y * _GridSize) / (_AtlasWidthCount+0.001f);
+                uv += float2(xOffset, yOffset);
 
-                float uvSize = 1.0f / _GridSize;
-                float2 div = i.uv / uvSize;
-                float2 min = (div - frac(div)) * uvSize;
-                float2 max = float2(min.x + uvSize, min.y + uvSize);
-
-                //Seam fix
-                max += float2(0.00001f, 0.00001f);
-
-                float2 percent = (i.uv - min) / (max - min);
-
-                float cellUVSize = _CellSize / (_CellSize * _AtlasWidthCount);
-                float2 targetUV = float2(coordX * cellUVSize, coordY * cellUVSize) + (percent * cellUVSize);
-
-                fixed4 col = tex2D(_TextureAtlas, targetUV);
-                return col;
+                return tex2D(_TextureAtlas, uv);
             }
             ENDCG
         }
