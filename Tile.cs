@@ -18,9 +18,38 @@ namespace Elanetic.Tilemaps
         public int chunkIndex { get; private set; }
         public int tileIndex { get; private set; }
 
-        public int tilemapTextureIndex { get; private set; } = -1;
+        public int tilemapTextureIndex { get; internal set; } = 0;
 
-        public RenderType renderType { get; set; }
+        public RenderType renderType
+        {
+            get => m_RenderType;
+            set
+            {
+                if(m_RenderType == value) return;
+                m_RenderType = value;
+                if(m_RenderType == RenderType.Individual)
+                {
+#if SAFE_EXECUTION
+                    m_IndivualRenderer = new GameObject("Individual Tile (" + position.x + ", " + position.y + ")").AddComponent<SpriteRenderer>();
+#else
+                    m_IndivualRenderer = new GameObject("Individual Tile").AddComponent<SpriteRenderer>();
+#endif
+                    m_IndivualRenderer.transform.SetParent(tilemap.transform);
+                }
+                else if(m_RenderType == RenderType.Group)
+                {
+
+                }
+                else //RenderType.Chunk
+                {
+                    //TODO Destroy Individual/Group mesh parts
+                    tilemap.SetCellTexture(position, tilemapTextureIndex);
+                }
+            }
+        }
+
+        private RenderType m_RenderType = RenderType.Chunk;
+        private SpriteRenderer m_IndivualRenderer;
 
         protected Tile(Tilemap tilemap, int positionX, int positionY)
         {
@@ -37,26 +66,22 @@ namespace Elanetic.Tilemaps
         protected virtual void OnDestroyed() { }
 
         /// <summary>
-        /// Set the tile texture. Uses the index of the Tilemap's internal texture atlas. Setting to a negative number means a blank texture.
-        /// Make sure to call Tilemap.AddTexture to fill and add.
+        /// Individual: Tile is place as it's own GameObject and SpriteRenderer. Less peformance but allows for different rendering possibilities such as individual sorting
+        /// Group: Try to group similar tiles when placed in lines or rectangles. Otherwise render individually.
+        /// Chunk: This tile is rendered with the Texture Grid class where it is rendered within a chunk's quad mesh for maximum performance
         /// </summary>
-        public void SetTexture(int tilemapTextureIndex)
-        {
-            this.tilemapTextureIndex = tilemapTextureIndex;
-            tilemap.SetTileTexture(position.x, position.y, tilemapTextureIndex);
-        }
-
-        //Individual means this tile is place as it's own GameObject and SpriteRenderer. Less peformance but allows for different rendering possibilities such as individual sorting
-        //Chunk means this tile is rendered upon a texture shared with other tiles that have their render type set to chunk improving performance
         public enum RenderType
         {
             Individual,
+            Group,
             Chunk
         }
 
-        //None: No collision or handled elsewhere
-        //Tile: Collision encapsulates the whole tile. Is added to custom Tilemap Collider when possible for maximum performance
-        //Custom: Collision is of a custom shape
+        /// <summary>
+        /// None: No collision
+        /// Tile: Collision encapsulates the whole tile. Is added to custom Tilemap Collider when possible for maximum performance
+        /// Custom: Collision is of a custom shape
+        /// </summary>
         public enum CollisionType
         {
             None,

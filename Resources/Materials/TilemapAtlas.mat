@@ -7,8 +7,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Tilemap Material
-  m_Shader: {fileID: 4800000, guid: fb1f2c823c52a4837ac0f935ed057f5b, type: 3}
+  m_Name: TilemapAtlas
+  m_Shader: {fileID: 4800000, guid: 79bdbd2a2f26f41abbb424e8d7911430, type: 3}
   m_ShaderKeywords: 
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -59,12 +59,9 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
-    - _TextureIndices:
-        m_Texture: {fileID: 0}
-        m_Scale: {x: 1, y: 1}
-        m_Offset: {x: 0, y: 0}
     m_Floats:
-    - _AtlasWidthCount: 3
+    - _AtlasHeightCount: 1
+    - _AtlasWidthCount: 2
     - _BumpScale: 1
     - _CellSize: 36
     - _Cutoff: 0.5
@@ -73,7 +70,6 @@ Material:
     - _GlossMapScale: 1
     - _Glossiness: 0.5
     - _GlossyReflections: 1
-    - _GridSize: 10
     - _Metallic: 0
     - _Mode: 0
     - _OcclusionStrength: 1

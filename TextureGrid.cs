@@ -72,7 +72,7 @@ namespace Elanetic.Tilemaps
         }
 
         /// <summary>
-        /// The texture format used for cells. Compressed textures means smaller memory sizes and faster texture copies but reduced features.
+        /// The texture format used for cells. Compressed textures means smaller memory sizes and faster texture copies but reduced features. Default is BC7.
         /// </summary>
         public TextureFormat textureFormat
         {
@@ -86,6 +86,8 @@ namespace Elanetic.Tilemaps
                 m_TextureFormat = value;
             }
         }
+
+        internal TextureAtlas textureAtlas;
 
         private int m_ChunkSize = 8;
         private int m_CellTextureSize = 36;
@@ -103,7 +105,6 @@ namespace Elanetic.Tilemaps
         private Hash128 m_BlankHash;
 #endif
 
-        private TextureAtlas m_TextureAtlas;
         private ChunkedGridArray<int> m_CellTextures = new ChunkedGridArray<int>(16, 8, 16);
         private ChunkedGridArray<GridChunk> m_Chunks = new ChunkedGridArray<GridChunk>(16, 8, 16);
         private DirectTexture2D m_BlankTexture;
@@ -115,12 +116,12 @@ namespace Elanetic.Tilemaps
         //Called by AddCellTexture upon first texture added.
         private void Init()
         {
-            m_TextureAtlas = new TextureAtlas(new Vector2Int(cellTextureSize, cellTextureSize), new Vector2Int(16, 16), textureFormat);
+            textureAtlas = new TextureAtlas(new Vector2Int(cellTextureSize, cellTextureSize), new Vector2Int(16, 16), textureFormat);
             m_LockSizes = true;
 
             m_BlankTexture = DirectGraphics.CreateTexture(cellTextureSize, cellTextureSize, textureFormat);
             DirectGraphics.ClearTexture(m_BlankTexture.nativePointer);
-            m_TextureAtlas.AddTexture(m_BlankTexture.texture);
+            textureAtlas.AddTexture(m_BlankTexture.texture);
 
 #if SAFE_EXECUTION
             //Texture optimal usage check
@@ -128,10 +129,10 @@ namespace Elanetic.Tilemaps
 #endif
 
             m_GridMaterial = new Material(Shader.Find("Elanetic/Tilemap"));
-            m_GridMaterial.SetTexture("_TextureAtlas", m_TextureAtlas.fullTexture);
+            m_GridMaterial.SetTexture("_TextureAtlas", textureAtlas.fullTexture);
             m_GridMaterial.SetFloat("_CellSize", cellSize);
             m_GridMaterial.SetFloat("_GridSize", chunkSize);
-            m_GridMaterial.SetFloat("_AtlasWidthCount", m_TextureAtlas.maxTextureCount.x);
+            m_GridMaterial.SetFloat("_AtlasWidthCount", textureAtlas.maxTextureCount.x);
 
             m_ChunkMesh = new Mesh();
 
@@ -192,9 +193,9 @@ namespace Elanetic.Tilemaps
         {
 #if SAFE_EXECUTION
             if(cellTexture.width != cellTextureSize || cellTexture.height != cellTextureSize)
-                throw new ArgumentException("Inputted tile texture does not match tilemap tile texture size.", nameof(cellTexture));
+                throw new ArgumentException("Inputted texture does not match texture grid texture size.", nameof(cellTexture));
             if(cellTexture.format != m_TextureFormat)
-                throw new ArgumentException("Specified texture format must match tilemap format of '" + m_TextureFormat + "'.", nameof(cellTexture));
+                throw new ArgumentException("Specified texture format must match texture grid format of '" + m_TextureFormat + "'.", nameof(cellTexture));
 #endif
             if(!m_LockSizes)
             {
@@ -210,7 +211,7 @@ namespace Elanetic.Tilemaps
             int atlasIndex;
             if(!m_TextureLookup.TryGetValue(hash, out atlasIndex))
             {
-                atlasIndex = m_TextureAtlas.AddTexture(cellTexture);
+                atlasIndex = textureAtlas.AddTexture(cellTexture);
                 m_TextureLookup.Add(hash, atlasIndex);
             }
             return atlasIndex;
@@ -220,15 +221,15 @@ namespace Elanetic.Tilemaps
         }
 
         /// <summary>
-        /// An alternative way of setting a cell's texture without creating a Tile instance.
+        /// Set the texture of a cell.
         /// </summary>
         public void SetCellTexture(int x, int y, int textureIndex)
         {
 #if SAFE_EXECUTION
             if(textureIndex < 0)
-                throw new ArgumentOutOfRangeException(nameof(textureIndex), "Texture Index must be 0 or more.");
-            if(textureIndex >= m_TextureAtlas.textureCount)
-                throw new IndexOutOfRangeException("Tile at (" + x.ToString() + ", " + y.ToString() + ") with invalid texture atlas index of '" + textureIndex.ToString() + "'. Texture atlas only has '" + m_TextureAtlas.textureCount + "' textures added. Add textures with TextureGrid.AddCellTexture.");
+                throw new ArgumentOutOfRangeException(nameof(textureIndex), "Inputted texture Index must be 0 or more.");
+            if(textureIndex >= textureAtlas.textureCount)
+                throw new IndexOutOfRangeException("Inputted invalid texture atlas index '" + textureIndex.ToString() + "'. Texture atlas only has '" + textureAtlas.textureCount + "' textures added. Add textures with TextureGrid.AddCellTexture.");
 #endif
 
             GridChunk chunk = GetChunk(x, y);
@@ -346,7 +347,6 @@ namespace Elanetic.Tilemaps
             public int chunkX;
             public int chunkY;
             public TextureGrid textureGrid;
-            public Mesh mesh;
 
             private Texture2D m_DataTexture;
             private IntPtr m_DataTexturePointer;
@@ -394,6 +394,11 @@ namespace Elanetic.Tilemaps
                 meshRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
                 meshRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
                 meshRenderer.allowOcclusionWhenDynamic = true;                
+            }
+
+            private void OnDestroy()
+            {
+                Destroy(m_DataTexture);
             }
 
             public void SetTexture(int cellX, int cellY, int textureAtlasIndex)
