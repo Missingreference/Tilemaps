@@ -1,10 +1,10 @@
-Shader "Elanetic/TilemapCompute"
+Shader "Elanetic/TextureGrid"
 {
     Properties
     {
         _TextureAtlas ("Texture Atlas", 2D) = "white" {}
-        _ChunkSize("Chunk World Size", float) = 8
-        _GridSize("Grid Size", float) = 8 
+        _ChunkWorldSize("Chunk World Size", float) = 8
+        _ChunkCellWidthCount("Grid Size", float) = 8 
         _AtlasWidthCount("Atlas Width Count", float) = 3
     }
     SubShader
@@ -53,24 +53,23 @@ Shader "Elanetic/TilemapCompute"
 
             sampler2D _TextureAtlas;
             sampler2D _TextureIndices;
-            float _ChunkSize;
-            float _GridSize;
+            float _ChunkWorldSize;
+            float _ChunkCellWidthCount;
             float _AtlasWidthCount;
+
             v2f vert (appdata v, uint instanceID : SV_InstanceID)
             {
                 v2f o;
-                float2 chunkPosition = _ChunkData[instanceID].position * _ChunkSize;
-                o.vertex = UnityObjectToClipPos((v.vertex * _ChunkSize) + float4(chunkPosition.x,chunkPosition.y,0,0));
+                float2 chunkPosition = _ChunkData[instanceID].position * _ChunkWorldSize;
+                o.vertex = UnityObjectToClipPos((v.vertex * _ChunkWorldSize) + float4(chunkPosition.x,chunkPosition.y,0,0));
                 o.uv = v.uv;
                 o.instanceIndex = instanceID;
                 return o;
             }
 
-            
-
-            fixed4 frag (v2f i) : SV_Target
+            fixed4 frag(v2f i) : SV_Target
             {
-                float cellSize = (1.0f/_GridSize);
+                float cellSize = (1.0f/ _ChunkCellWidthCount);
                 float2 sourceUV =  cellSize * floor(i.uv / cellSize);
                 
                 uint xInt = sourceUV.x * 8;
@@ -88,8 +87,8 @@ Shader "Elanetic/TilemapCompute"
                 float2 uv = float2(xPos, yPos) / _AtlasWidthCount;
                 
                 // Offset to fragment position inside tile
-                float xOffset = frac(i.uv.x * _GridSize) / (_AtlasWidthCount+0.001f);
-                float yOffset = frac(i.uv.y * _GridSize) / (_AtlasWidthCount+0.001f);
+                float xOffset = frac(i.uv.x * _ChunkCellWidthCount) / (_AtlasWidthCount+0.001f);
+                float yOffset = frac(i.uv.y * _ChunkCellWidthCount) / (_AtlasWidthCount+0.001f);
                 uv += float2(xOffset, yOffset);
                 
                 return tex2D(_TextureAtlas, uv);
