@@ -105,8 +105,9 @@ namespace Elanetic.Tilemaps
         const int m_StrideSize = (sizeof(float) * 2) + (sizeof(uint) * (64 / 4));
 
         protected bool m_LockSizes = false;
-#if SAFE_EXECUTION
+#if UNITY_EDITOR && SAFE_EXECUTION
         //Texture optimal usage check
+        //Texture.imageContentHash only exists in the Unity Editor.
         private Dictionary<Hash128, int> m_TextureLookup = new Dictionary<Hash128, int>(256);
         private Hash128 m_BlankHash;
 #endif
@@ -216,8 +217,9 @@ namespace Elanetic.Tilemaps
             m_Material.SetInt(m_ShaderAtlasWidthCountID, m_TextureAtlas.maxTextureCount.x);
             m_Material.SetBuffer(m_ShaderChunkDataID, m_DataBuffer);
 
-#if SAFE_EXECUTION
+#if UNITY_EDITOR && SAFE_EXECUTION
             //Texture optimal usage check
+            //Texture.imageContentHash only exists in the Unity Editor.
             m_BlankHash = blankTexture.texture.imageContentsHash;
 #endif
         }
@@ -273,8 +275,9 @@ namespace Elanetic.Tilemaps
                 Init();
             }
 
-#if SAFE_EXECUTION
+#if UNITY_EDITOR && SAFE_EXECUTION
             //Texture optimal usage check
+            //Texture.imageContentHash only exists in the Unity Editor.
             Hash128 hash = cellTexture.imageContentsHash;
             if(hash == m_BlankHash)
                 throw new ArgumentException("Inputted texture is blank. Use TextureGrid.ClearCellTexture instead.", nameof(cellTexture));
