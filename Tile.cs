@@ -8,6 +8,9 @@ using Elanetic.Tools;
 
 namespace Elanetic.Tilemaps
 {
+    /// <summary>
+    /// The base tile class. Has minimal features and small allocation size as possible for performance.
+    /// </summary>
     public abstract class Tile
     {
         //The position of the tile on the tilemap. No two tiles share the same position

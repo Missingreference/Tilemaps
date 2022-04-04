@@ -100,7 +100,7 @@ namespace Elanetic.Tilemaps
         private int m_ChunkTextureSize = 36 * 8;
         private float m_WorldCellSize = 2.0f * 8;
         private int m_TotalCellCountPerChunk = 64;
-        private TextureFormat m_TextureFormat = TextureFormat.BC7;
+        private TextureFormat m_TextureFormat = TextureFormat.RGBA32;
 
         const int m_StrideSize = (sizeof(float) * 2) + (sizeof(uint) * (64 / 4));
 
@@ -120,7 +120,7 @@ namespace Elanetic.Tilemaps
         static private int m_ShaderAtlasWidthCountID;
         static private int m_ShaderChunkDataID;
 
-        void Awake()
+        protected virtual void Awake()
         {
             if(m_TileMesh.IsNull())
             {
