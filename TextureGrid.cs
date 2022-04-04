@@ -288,6 +288,10 @@ namespace Elanetic.Tilemaps
                 atlasIndex = m_TextureAtlas.AddTexture(cellTexture);
                 m_TextureLookup.Add(hash, atlasIndex);
             }
+            else
+            {
+                Debug.LogWarning("Texture '" + cellTexture.name + "' appears to have already been added to the texture atlas for the texture grid. Expect unexpected execution in builds.");
+            }
             return atlasIndex;
 #else
             return m_TextureAtlas.AddTexture(cellTexture);
