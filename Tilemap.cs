@@ -19,7 +19,7 @@ namespace Elanetic.Tilemaps
     {
         static private Dictionary<Type, ConstructorDelegate> tileConstructors;
 
-        private ChunkedGridArray<Tile> m_Tiles = new ChunkedGridArray<Tile>(16, 8, 16);
+        private ChunkedGridArray<Tile> m_Tiles = new ChunkedGridArray<Tile>(16, 8);
 
         private const BindingFlags TILE_CREATION_BINDING_FLAGS = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
