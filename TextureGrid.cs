@@ -13,12 +13,12 @@ namespace Elanetic.Tilemaps
 {
     /// <summary>
     /// A grid of square textures. Add textures to the texture atlas and set textures for individual cells.
+    /// TODO: Support Unity Transform rotation and scaling.
     /// </summary>
     public class TextureGrid : MonoBehaviour
     {
         /// <summary>
         /// How many cells are in a chunk. cellTextureSize times chunkSize is the result of the size of the texture for each chunk.
-        /// TODO: Support Unity Transform rotation and scaling.
         /// </summary>
         public int chunkSize
         {
