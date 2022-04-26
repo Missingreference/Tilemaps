@@ -203,6 +203,7 @@ namespace Elanetic.Tilemaps
         private void Init()
         {
             m_TextureAtlas = new TextureAtlas(new Vector2Int(cellTextureSize, cellTextureSize), new Vector2Int(16, 16), textureFormat);
+
             m_LockSizes = true;
 
             DirectTexture2D blankTexture = DirectGraphics.CreateTexture(cellTextureSize, cellTextureSize, textureFormat);
@@ -374,14 +375,18 @@ namespace Elanetic.Tilemaps
                     m_ChunkData.ReinterpretStore(targetIndex, chunkPositionVector);
                     m_ChunkData[targetWriteIndex] = (byte)textureIndex;
 
-                    //Do GPU write
-                    NativeArray<byte> targetData = m_DataBuffer.BeginWrite<byte>(targetIndex, 8);
-                    targetData.ReinterpretStore<Vector2>(0, chunkPositionVector);
-                    m_DataBuffer.EndWrite<byte>(8);
+                    //Only do GPU write due to data buffer being disposed
+                    if(enabled)
+                    {
+                        //Do GPU write
+                        NativeArray<byte> targetData = m_DataBuffer.BeginWrite<byte>(targetIndex, 8);
+                        targetData.ReinterpretStore<Vector2>(0, chunkPositionVector);
+                        m_DataBuffer.EndWrite<byte>(8);
 
-                    targetData = m_DataBuffer.BeginWrite<byte>(targetWriteIndex, 1);
-                    targetData[0] = (byte)textureIndex;
-                    m_DataBuffer.EndWrite<byte>(1);
+                        targetData = m_DataBuffer.BeginWrite<byte>(targetWriteIndex, 1);
+                        targetData[0] = (byte)textureIndex;
+                        m_DataBuffer.EndWrite<byte>(1);
+                    }
                 }
 
                 m_ExistingCount++;
@@ -401,10 +406,14 @@ namespace Elanetic.Tilemaps
                 //Do local write
                 m_ChunkData[targetWriteIndex] = (byte)textureIndex;
 
-                //Do GPU write
-                NativeArray<byte> targetData = m_DataBuffer.BeginWrite<byte>(targetWriteIndex, 1);
-                targetData[0] = (byte)textureIndex;
-                m_DataBuffer.EndWrite<byte>(1);
+                //Only do GPU write due to data buffer being disposed
+                if(enabled)
+                {
+                    //Do GPU write
+                    NativeArray<byte> targetData = m_DataBuffer.BeginWrite<byte>(targetWriteIndex, 1);
+                    targetData[0] = (byte)textureIndex;
+                    m_DataBuffer.EndWrite<byte>(1);
+                }
             }
         }
 
