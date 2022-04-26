@@ -299,7 +299,7 @@ namespace Elanetic.Tilemaps
 #endif
         }
 
-        ChunkedGridArray<int?> m_ChunkDataArray = new ChunkedGridArray<int?>();
+        ChunkedGridArray<int> m_ChunkDataArray = new ChunkedGridArray<int>();
 
         public void SetCellTexture(Vector2Int cellPosition, int textureIndex)
         {
@@ -319,9 +319,9 @@ namespace Elanetic.Tilemaps
             negativityBoost = (((y & int.MinValue) >> 31) & 1);
             int chunkPositionY = ((y + negativityBoost) / chunkSize) - negativityBoost;
 
-            int? chunkDataRef = m_ChunkDataArray.GetItem(chunkPositionX, chunkPositionY);
+            int chunkDataRef = m_ChunkDataArray.GetItem(chunkPositionX, chunkPositionY) - 1;
 
-            if(chunkDataRef == null)
+            if(chunkDataRef < 0)
             {
                 if(textureIndex == 0) return;
 
@@ -391,7 +391,7 @@ namespace Elanetic.Tilemaps
 
                 m_ExistingCount++;
                 chunkDataRef = targetIndex;
-                m_ChunkDataArray.SetItem(chunkPositionX, chunkPositionY, targetIndex);
+                m_ChunkDataArray.SetItem(chunkPositionX, chunkPositionY, targetIndex + 1);
             }
             else
             {
@@ -401,7 +401,7 @@ namespace Elanetic.Tilemaps
 
                 int cellIndex = Utils.CoordToIndex(localCellX, localCellY, chunkSize);
 
-                int targetWriteIndex = chunkDataRef.Value + 8 + cellIndex;
+                int targetWriteIndex = chunkDataRef + 8 + cellIndex;
 
                 //Do local write
                 m_ChunkData[targetWriteIndex] = (byte)textureIndex;
