@@ -105,6 +105,8 @@ namespace Elanetic.Tilemaps
                 //Destroy old tile if one exists
                 if(existingTile != null)
                 {
+                    //While technically slower to do, we should set the position to null before destroying that way if any code from the Tile.OnDestroyed function accesses the index it can see that the tile actually no longer exists there
+                    m_Tiles.SetItem(x, y, null);
                     existingTile.Destroy();
                 }
 
