@@ -18,25 +18,6 @@ namespace Elanetic.Tilemaps
     public class TextureGrid : MonoBehaviour
     {
         /// <summary>
-        /// How many cells are in a chunk. cellTextureSize times chunkSize is the result of the size of the texture for each chunk.
-        /// </summary>
-        public int chunkSize
-        {
-            get => m_ChunkSize;
-            set
-            {
-#if SAFE_EXECUTION
-                if(m_LockSizes)
-                    throw new InvalidOperationException("Cannot change the chunk size for " + GetType().Name + " as it has been initialized. Create a new instance instead.");
-#endif
-                m_ChunkSize = value;
-                m_ChunkTextureSize = cellTextureSize * m_ChunkSize;
-                m_WorldCellSize = cellSize * chunkSize;
-                m_TotalCellCountPerChunk = m_ChunkSize * m_ChunkSize;
-            }
-        }
-
-        /// <summary>
         /// The texture size for each cell.
         /// </summary>
         public int cellTextureSize
@@ -49,7 +30,6 @@ namespace Elanetic.Tilemaps
                     throw new InvalidOperationException("Cannot change the cell texture size for " + GetType().Name + " as it has been initialized. Create a new instance instead.");
 #endif
                 m_CellTextureSize = value;
-                m_ChunkTextureSize = cellTextureSize * m_ChunkSize;
             }
         }
 
@@ -67,7 +47,7 @@ namespace Elanetic.Tilemaps
 #endif
                 m_CellSize = value;
                 m_HalfCellSize = m_CellSize * 0.5f;
-                m_WorldCellSize = cellSize * chunkSize;
+                m_WorldCellSize = m_CellSize * m_ChunkSize;
             }
         }
 
@@ -93,13 +73,13 @@ namespace Elanetic.Tilemaps
         private Material m_Material;
         private NativeArray<byte> m_ChunkData;
 
-        private int m_ChunkSize = 8;
+        //Chunk size is hard coded in the shader due to shader data structs needing to be defined at compile time.
+        //8x8 chunk size is an arbitruary choice
+        private const int m_ChunkSize = 8;
         private int m_CellTextureSize = 36;
         private float m_CellSize = 2.0f;
         private float m_HalfCellSize = 2.0f * 0.5f;
-        private int m_ChunkTextureSize = 36 * 8;
         private float m_WorldCellSize = 2.0f * 8;
-        private int m_TotalCellCountPerChunk = 64;
         private TextureFormat m_TextureFormat = TextureFormat.RGBA32;
 
         const int m_StrideSize = (sizeof(float) * 2) + (sizeof(uint) * (64 / 4));
@@ -116,7 +96,6 @@ namespace Elanetic.Tilemaps
         static private Shader m_Shader = null;
         static private int m_ShaderTextureAtlasID;
         static private int m_ShaderChunkSizeID;
-        static private int m_ShaderGridSizeID;
         static private int m_ShaderAtlasWidthCountID;
         static private int m_ShaderChunkDataID;
 
@@ -157,7 +136,6 @@ namespace Elanetic.Tilemaps
                 m_Shader = Shader.Find("Elanetic/TextureGrid");
                 m_ShaderTextureAtlasID = Shader.PropertyToID("_TextureAtlas");
                 m_ShaderChunkSizeID = Shader.PropertyToID("_ChunkWorldSize");
-                m_ShaderGridSizeID = Shader.PropertyToID("_ChunkCellWidthCount");
                 m_ShaderAtlasWidthCountID = Shader.PropertyToID("_AtlasWidthCount");
                 m_ShaderChunkDataID = Shader.PropertyToID("_ChunkData");
             }
@@ -202,11 +180,11 @@ namespace Elanetic.Tilemaps
         //Called by AddCellTexture upon first texture added.
         private void Init()
         {
-            m_TextureAtlas = new TextureAtlas(new Vector2Int(cellTextureSize, cellTextureSize), new Vector2Int(16, 16), textureFormat);
+            m_TextureAtlas = new TextureAtlas(new Vector2Int(m_CellTextureSize, m_CellTextureSize), new Vector2Int(16, 16), m_TextureFormat);
 
             m_LockSizes = true;
 
-            DirectTexture2D blankTexture = DirectGraphics.CreateTexture(cellTextureSize, cellTextureSize, textureFormat);
+            DirectTexture2D blankTexture = DirectGraphics.CreateTexture(m_CellTextureSize, m_CellTextureSize, m_TextureFormat);
             DirectGraphics.ClearTexture(blankTexture.nativePointer);
             m_TextureAtlas.AddTexture(blankTexture.texture);
             blankTexture.Destroy();
@@ -214,7 +192,6 @@ namespace Elanetic.Tilemaps
             //Set material properties
             m_Material.SetTexture(m_ShaderTextureAtlasID, m_TextureAtlas.fullTexture);
             m_Material.SetFloat(m_ShaderChunkSizeID, m_WorldCellSize);
-            m_Material.SetInt(m_ShaderGridSizeID, chunkSize);
             m_Material.SetInt(m_ShaderAtlasWidthCountID, m_TextureAtlas.maxTextureCount.x);
             m_Material.SetBuffer(m_ShaderChunkDataID, m_DataBuffer);
 
@@ -229,7 +206,7 @@ namespace Elanetic.Tilemaps
 
         public Vector2Int LocalToCell(Vector2 localPosition)
         {
-            return new Vector2Int(Mathf.FloorToInt(localPosition.x / cellSize), Mathf.FloorToInt(localPosition.y / cellSize));
+            return new Vector2Int(Mathf.FloorToInt(localPosition.x / m_CellSize), Mathf.FloorToInt(localPosition.y / m_CellSize));
         }
 
         public Vector2Int WorldToCell(Vector2 worldPosition)
@@ -239,7 +216,7 @@ namespace Elanetic.Tilemaps
 
         public Vector2 CellToLocal(Vector2Int cellPosition)
         {
-            return new Vector2(cellPosition.x * cellSize, cellPosition.y * cellSize);
+            return new Vector2(cellPosition.x * m_CellSize, cellPosition.y * m_CellSize);
         }
 
         public Vector2 CellToWorld(Vector2Int cellPosition)
@@ -266,7 +243,7 @@ namespace Elanetic.Tilemaps
         public int AddCellTexture(Texture2D cellTexture)
         {
 #if SAFE_EXECUTION
-            if(cellTexture.width != cellTextureSize || cellTexture.height != cellTextureSize)
+            if(cellTexture.width != m_CellTextureSize || cellTexture.height != m_CellTextureSize)
                 throw new ArgumentException("Inputted texture does not match texture grid texture size.", nameof(cellTexture));
             if(cellTexture.format != m_TextureFormat)
                 throw new ArgumentException("Specified texture format must match texture grid format of '" + m_TextureFormat + "'.", nameof(cellTexture));
@@ -315,9 +292,9 @@ namespace Elanetic.Tilemaps
                 throw new IndexOutOfRangeException("Inputted invalid texture atlas index '" + textureIndex.ToString() + "'. Texture atlas only has '" + m_TextureAtlas.textureCount + "' textures added. Add textures with TextureGrid.AddCellTexture.");
 #endif
             int negativityBoost = (((x & int.MinValue) >> 31) & 1);
-            int chunkPositionX = ((x + negativityBoost) / chunkSize) - negativityBoost;
+            int chunkPositionX = ((x + negativityBoost) / m_ChunkSize) - negativityBoost;
             negativityBoost = (((y & int.MinValue) >> 31) & 1);
-            int chunkPositionY = ((y + negativityBoost) / chunkSize) - negativityBoost;
+            int chunkPositionY = ((y + negativityBoost) / m_ChunkSize) - negativityBoost;
 
             int chunkDataRef = m_ChunkDataArray.GetItem(chunkPositionX, chunkPositionY) - 1;
 
@@ -349,10 +326,10 @@ namespace Elanetic.Tilemaps
                     m_ChunkData.ReinterpretStore<Vector2>(targetIndex, new Vector2(chunkPositionX, chunkPositionY));
 
                     //We are doing the local write for the cell texture here since the local copy will be copied to the GPU side anyways in ResizeGPUData
-                    int localCellX = FastMath.Abs(x - (chunkPositionX * chunkSize));
-                    int localCellY = FastMath.Abs(y - (chunkPositionY * chunkSize));
+                    int localCellX = FastMath.Abs(x - (chunkPositionX * m_ChunkSize));
+                    int localCellY = FastMath.Abs(y - (chunkPositionY * m_ChunkSize));
 
-                    int cellIndex = Utils.CoordToIndex(localCellX, localCellY, chunkSize);
+                    int cellIndex = Utils.CoordToIndex(localCellX, localCellY, m_ChunkSize);
 
                     int targetWriteIndex = targetIndex + 8 + cellIndex;
 
@@ -362,10 +339,10 @@ namespace Elanetic.Tilemaps
                 }
                 else
                 {
-                    int localCellX = FastMath.Abs(x - (chunkPositionX * chunkSize));
-                    int localCellY = FastMath.Abs(y - (chunkPositionY * chunkSize));
+                    int localCellX = FastMath.Abs(x - (chunkPositionX * m_ChunkSize));
+                    int localCellY = FastMath.Abs(y - (chunkPositionY * m_ChunkSize));
 
-                    int cellIndex = Utils.CoordToIndex(localCellX, localCellY, chunkSize);
+                    int cellIndex = Utils.CoordToIndex(localCellX, localCellY, m_ChunkSize);
                     
                     int targetWriteIndex = targetIndex + 8 + cellIndex;
 
@@ -396,10 +373,10 @@ namespace Elanetic.Tilemaps
             else
             {
                 //TODO Destroy completely blank chunk
-                int localCellX = FastMath.Abs(x - (chunkPositionX * chunkSize));
-                int localCellY = FastMath.Abs(y - (chunkPositionY * chunkSize));
+                int localCellX = FastMath.Abs(x - (chunkPositionX * m_ChunkSize));
+                int localCellY = FastMath.Abs(y - (chunkPositionY * m_ChunkSize));
 
-                int cellIndex = Utils.CoordToIndex(localCellX, localCellY, chunkSize);
+                int cellIndex = Utils.CoordToIndex(localCellX, localCellY, m_ChunkSize);
 
                 int targetWriteIndex = chunkDataRef + 8 + cellIndex;
 
