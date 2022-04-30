@@ -67,6 +67,18 @@ namespace Elanetic.Tilemaps
             }
         }
 
+        /// <summary>
+        /// The render queue for the material.
+        /// </summary>
+        public int renderQueue
+        {
+            get => m_Material.renderQueue;
+            set
+            {
+                m_Material.renderQueue = value;
+            }
+        }
+
         private ComputeBuffer m_ArgumentBuffer;
         private ComputeBuffer m_DataBuffer;
         private TextureAtlas m_TextureAtlas;
@@ -142,7 +154,7 @@ namespace Elanetic.Tilemaps
 
             m_Material = new Material(m_Shader);
             m_Material.enableInstancing = true;
-            m_Material.renderQueue = 3000;
+            m_Material.renderQueue = (int)RenderQueue.Transparent;
 
             m_ChunkData = new NativeArray<byte>(m_MaxChunkCount * m_StrideSize, Allocator.Persistent, NativeArrayOptions.ClearMemory);
         }
