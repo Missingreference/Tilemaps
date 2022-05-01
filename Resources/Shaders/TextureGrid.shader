@@ -11,7 +11,7 @@ Shader "Elanetic/TextureGrid"
         Tags { "RenderType"="Transparent" "Queue"="Transparent" }
         LOD 100
 
-		Blend One OneMinusSrcAlpha
+		Blend SrcAlpha OneMinusSrcAlpha
         Pass
         {
             CGPROGRAM
