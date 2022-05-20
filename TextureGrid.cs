@@ -298,6 +298,8 @@ namespace Elanetic.Tilemaps
         public void SetCellTexture(int x, int y, int textureIndex)
         {
 #if SAFE_EXECUTION
+            if(m_TextureAtlas == null)
+                throw new InvalidOperationException("Inputted invalid texture atlas index '" + textureIndex.ToString() + "'. Texture atlas has no textures added. Add textures with TextureGrid.AddCellTexture.");
             if(textureIndex < 0)
                 throw new ArgumentOutOfRangeException(nameof(textureIndex), "Inputted texture Index must be 0 or more.");
             if(textureIndex >= m_TextureAtlas.textureCount)
