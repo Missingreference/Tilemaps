@@ -24,6 +24,9 @@ namespace Elanetic.Tilemaps
             this.position = new Vector2Int(positionX, positionY);
         }
 
+        //Short-hand for set the texture of this tile
+        protected void SetTexture(int textureIndex) => tilemap.SetCellTexture(position, textureIndex);
+
         internal void Destroy()
         {
             OnDestroyed();
