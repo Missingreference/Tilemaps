@@ -255,6 +255,8 @@ namespace Elanetic.Tilemaps
         public int AddCellTexture(Texture2D cellTexture)
         {
 #if SAFE_EXECUTION
+            if(cellTexture == null)
+                throw new NullReferenceException("Inputted texture is null.");
             if(cellTexture.width != m_CellTextureSize || cellTexture.height != m_CellTextureSize)
                 throw new ArgumentException("Inputted texture does not match texture grid texture size.", nameof(cellTexture));
             if(cellTexture.format != m_TextureFormat)
