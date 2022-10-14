@@ -1,0 +1,15 @@
+{
+  "name": "com.elanetic.tilemaps",
+  "version": "0.1.0",
+  "displayName": "Tilemaps",
+  "description": "An alternative tilemap system for Unity that prioritizes computational and rendering performance.",
+  "author": {
+    "name": "Elanetic",
+    "email": "Isaac@elanetic.net",
+    "url": "https://www.elanetic.net"
+  },
+  "dependencies": {
+    "com.elanetic.coretools": "0.1.0",
+    "com.elanetic.directgraphics": "0.0.1"
+  }
+}

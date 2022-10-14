@@ -8,6 +8,7 @@ using Unity.Collections;
 
 using Elanetic.Graphics;
 using Elanetic.Tools;
+using Elanetic.Tools.Unity;
 
 namespace Elanetic.Tilemaps
 {
@@ -25,7 +26,7 @@ namespace Elanetic.Tilemaps
             get => m_CellTextureSize;
             set
             {
-#if SAFE_EXECUTION
+#if DEBUG
                 if(m_LockSizes)
                     throw new InvalidOperationException("Cannot change the cell texture size for " + GetType().Name + " as it has been initialized. Create a new instance instead.");
 #endif
@@ -41,7 +42,7 @@ namespace Elanetic.Tilemaps
             get => m_CellSize;
             set
             {
-#if SAFE_EXECUTION
+#if DEBUG
                 if(m_LockSizes)
                     throw new InvalidOperationException("Cannot change the cell size for " + GetType().Name + " as it has been initialized. Create a new instance instead.");
 #endif
@@ -59,7 +60,7 @@ namespace Elanetic.Tilemaps
             get => m_TextureFormat;
             set
             {
-#if SAFE_EXECUTION
+#if DEBUG
                 if(m_LockSizes)
                     throw new InvalidOperationException("Cannot change the texture format for " + GetType().Name + " as it has been initialized. Create a new instance instead.");
 #endif
@@ -97,7 +98,7 @@ namespace Elanetic.Tilemaps
         const int m_StrideSize = (sizeof(float) * 2) + (sizeof(uint) * (64 / 4));
 
         protected bool m_LockSizes = false;
-#if UNITY_EDITOR && SAFE_EXECUTION
+#if UNITY_EDITOR && DEBUG
         //Texture optimal usage check
         //Texture.imageContentHash only exists in the Unity Editor.
         private Dictionary<Hash128, int> m_TextureLookup = new Dictionary<Hash128, int>(256);
@@ -207,7 +208,7 @@ namespace Elanetic.Tilemaps
             m_Material.SetInt(m_ShaderAtlasWidthCountID, m_TextureAtlas.maxTextureCount.x);
             m_Material.SetBuffer(m_ShaderChunkDataID, m_DataBuffer);
 
-#if UNITY_EDITOR && SAFE_EXECUTION
+#if UNITY_EDITOR && DEBUG
             //Texture optimal usage check
             //Texture.imageContentHash only exists in the Unity Editor.
             m_BlankHash = blankTexture.texture.imageContentsHash;
@@ -254,7 +255,7 @@ namespace Elanetic.Tilemaps
         /// </summary>
         public int AddCellTexture(Texture2D cellTexture)
         {
-#if SAFE_EXECUTION
+#if DEBUG
             if(cellTexture == null)
                 throw new NullReferenceException("Inputted texture is null.");
             if(cellTexture.width != m_CellTextureSize || cellTexture.height != m_CellTextureSize)
@@ -267,7 +268,7 @@ namespace Elanetic.Tilemaps
                 Init();
             }
 
-#if UNITY_EDITOR && SAFE_EXECUTION
+#if UNITY_EDITOR && DEBUG
             //Texture optimal usage check
             //Texture.imageContentHash only exists in the Unity Editor.
             Hash128 hash = cellTexture.imageContentsHash;
@@ -299,7 +300,7 @@ namespace Elanetic.Tilemaps
 
         public void SetCellTexture(int x, int y, int textureIndex)
         {
-#if SAFE_EXECUTION
+#if DEBUG
             if(m_TextureAtlas == null)
                 throw new InvalidOperationException("Inputted invalid texture atlas index '" + textureIndex.ToString() + "'. Texture atlas has no textures added. Add textures with TextureGrid.AddCellTexture.");
             if(textureIndex < 0)
@@ -345,7 +346,7 @@ namespace Elanetic.Tilemaps
                     int localCellX = FastMath.Abs(x - (chunkPositionX * m_ChunkSize));
                     int localCellY = FastMath.Abs(y - (chunkPositionY * m_ChunkSize));
 
-                    int cellIndex = Utils.CoordToIndex(localCellX, localCellY, m_ChunkSize);
+                    int cellIndex = CoreUtilities.CoordToIndex(localCellX, localCellY, m_ChunkSize);
 
                     int targetWriteIndex = targetIndex + 8 + cellIndex;
 
@@ -358,7 +359,7 @@ namespace Elanetic.Tilemaps
                     int localCellX = FastMath.Abs(x - (chunkPositionX * m_ChunkSize));
                     int localCellY = FastMath.Abs(y - (chunkPositionY * m_ChunkSize));
 
-                    int cellIndex = Utils.CoordToIndex(localCellX, localCellY, m_ChunkSize);
+                    int cellIndex = CoreUtilities.CoordToIndex(localCellX, localCellY, m_ChunkSize);
                     
                     int targetWriteIndex = targetIndex + 8 + cellIndex;
 
@@ -392,7 +393,7 @@ namespace Elanetic.Tilemaps
                 int localCellX = FastMath.Abs(x - (chunkPositionX * m_ChunkSize));
                 int localCellY = FastMath.Abs(y - (chunkPositionY * m_ChunkSize));
 
-                int cellIndex = Utils.CoordToIndex(localCellX, localCellY, m_ChunkSize);
+                int cellIndex = CoreUtilities.CoordToIndex(localCellX, localCellY, m_ChunkSize);
 
                 int targetWriteIndex = chunkDataRef + 8 + cellIndex;
 

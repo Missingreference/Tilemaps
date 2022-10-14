@@ -3,6 +3,7 @@
     "rootNamespace": "",
     "references": [
         "Elanetic.Tools",
+        "Elanetic.Tools.Unity",
         "Elanetic.Graphics"
     ],
     "includePlatforms": [],
